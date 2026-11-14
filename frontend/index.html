@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SPHEREx CHRONOS — NASA Space Apps 2026</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    body { background-color: #060913; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; overflow-x: hidden; }
+    .glass-panel { background: rgba(13, 19, 36, 0.88); backdrop-filter: blur(12px); border: 1px solid rgba(56, 189, 248, 0.18); }
+    .neon-border { box-shadow: 0 0 18px rgba(56, 189, 248, 0.15); }
+    input[type=range] { accent-color: #6366f1; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    // 1. ПОЛНАЯ ЛОКАЛИЗАЦИЯ (KZ / RU / EN) БЕЗ СМЕШИВАНИЯ ЯЗЫКОВ
+    const I18N = {
+      en: {
+        subtitle: "All-Sky Infrared Time-Lapse & Citizen Discovery Platform",
+        searchBtn: "Search",
+        shareBtn: "Share URL",
+        copied: "URL Copied!",
+        astroObject: "ASTRONOMICAL OBJECT",
+        funFactTitle: "DID YOU KNOW? (SCIENCE FACT)",
+        analysisModes: "ANALYSIS MODES",
+        imgSub: "Image Subtraction (Diff)",
+        catalogs: "Gaia DR3 / WISE Catalogs",
+        pmVectors: "Proper Motion Vectors",
+        autoDetect: "Auto-Detect Moving Objects",
+        circleTool: "Circle Marker Tool (Click Sky)",
+        fovLabel: "Field of View (FOV)",
+        lightCurve: "Light Curve (Brightness)",
+        spectrometer: "102-BAND IR SPECTROMETER",
+        activeBand: "Active Region",
+        discoveryLog: "DISCOVERY LOG",
+        exportJson: "JSON Export",
+        logBtn: "Submit Discovery",
+        loggedOk: "Saved to Citizen Log!",
+        beginnerHint: "Click any star, circle, or spectrum bar for a beginner guide",
+        guideTitle: "Beginner Astronomer Guide",
+        close: "Close",
+        astrometryShift: "Astrometric Shift",
+        autoFoundMsg: "Auto-Scan found 2 moving sources: Target + Uncataloged Candidate #1!",
+        classOptions: ["Moving Asteroid / NEO", "Brown Dwarf Candidate", "Variable Star / Exoplanet Transit", "Comet Activity"],
+        guideDict: {
+          target: { title: "Primary Target Object", desc: "This is the main celestial body tracked across 4 SPHEREx epochs (every 6 months). Notice how it shifts position relative to distant background stars!" },
+          candidate: { title: "Uncataloged Moving Candidate!", desc: "Our motion-detection algorithm spotted a faint object moving across epochs that isn't in Gaia/WISE catalogs. This could be a new asteroid or cold brown dwarf!" },
+          star: { title: "Background Reference Star", desc: "A distant star from the Gaia DR3 or WISE catalog. Because it is very far away, it stays fixed while nearby objects move across the sky." },
+          circle: { title: "User Observation Circle", desc: "You placed a marker ring around this coordinate! Astronomers circle moving or flickering objects to verify discoveries across multiple infrared bands." },
+          spectrum: { title: "102-Band Infrared Spectrum", desc: "SPHEREx splits infrared light into 102 colors (wavelengths). Dips in the yellow graph show molecules like Water Ice (H2O) or Methane (CH4) absorbing light!" },
+          lightcurve: { title: "Light Curve Graph", desc: "Shows how bright the object is in each 6-month epoch. A sharp dip can mean an exoplanet passing in front of a star, or dust clouds!" }
+        }
+      },
+      ru: {
+        subtitle: "Инфракрасный таймлапс всего неба и платформа открытий",
+        searchBtn: "Поиск",
+        shareBtn: "Ссылка",
+        copied: "Скопировано!",
+        astroObject: "АСТРОНОМИЧЕСКИЙ ОБЪЕКТ",
+        funFactTitle: "ИНТЕРЕСНЫЙ ФАКТ (СРАВНЕНИЕ И НАУКА)",
+        analysisModes: "РЕЖИМЫ АНАЛИЗА",
+        imgSub: "Вычитание кадров (Subtraction)",
+        catalogs: "Каталоги Gaia DR3 / WISE",
+        pmVectors: "Векторы собственного движения",
+        autoDetect: "Автопоиск движущихся объектов",
+        circleTool: "Рисование окружности (Клик по небу)",
+        fovLabel: "Поле зрения (FOV Масштаб)",
+        lightCurve: "Кривая блеска (Light Curve)",
+        spectrometer: "102-КАНАЛЬНЫЙ ИК-СПЕКТРОМЕТР",
+        activeBand: "Активная полоса",
+        discoveryLog: "ЖУРНАЛ ОТКРЫТИЙ",
+        exportJson: "JSON Отчёт",
+        logBtn: "Зафиксировать открытие",
+        loggedOk: "Открытие записано!",
+        beginnerHint: "Нажмите на любой объект, круг или график спектра для подсказки новичка",
+        guideTitle: "Гид для начинающего астронома",
+        close: "Закрыть",
+        astrometryShift: "Астрометрический сдвиг",
+        autoFoundMsg: "Автопоиск нашел 2 движущихся объекта: Основная цель + Новый кандидат #1!",
+        classOptions: ["Движущийся астероид / ОСЗ", "Кандидат в коричневые карлики", "Переменная звезда / Транзит экзопланеты", "Кометная активность"],
+        guideDict: {
+          target: { title: "Наблюдаемый объект", desc: "Главная цель, за которой телескоп SPHEREx следит каждые 6 месяцев. Пунктирная линия показывает, как объект смещается на фоне далеких неподвижных звезд." },
+          candidate: { title: "Найден новый движущийся объект!", desc: "Алгоритм автопоиска обнаружил тусклый объект, меняющий координаты между эпохами, которого нет в каталогах Gaia/WISE. Возможно, это новый астероид или коричневый карлик!" },
+          star: { title: "Опорная фоновая звезда", desc: "Далекая звезда из каталога Gaia DR3 или WISE. Из-за огромного расстояния она кажется неподвижной и служит ориентиром." },
+          circle: { title: "Метка наблюдения (Окружность)", desc: "Вы выделили область неба окружностью! Астрономы обводят движущиеся или меняющие яркость точки для проверки в 102 инфракрасных диапазонах." },
+          spectrum: { title: "102-полосный ИК-спектр", desc: "SPHEREx раскладывает инфракрасный свет на 102 оттенка. Провалы на графике означают, что в атмосфере объекта есть водяной лед (H2O), метан (CH4) или угарный газ!" },
+          lightcurve: { title: "График кривой блеска", desc: "Показывает изменение яркости объекта по эпохам. Резкое падение яркости может говорить о прохождении экзопланеты перед звездой или о пылевом облаке." }
+        }
+      },
+      kk: {
+        subtitle: "Бүкіл аспанның инфрақызыл таймлапсы және жаңалықтар платформасы",
+        searchBtn: "Іздеу",
+        shareBtn: "Сілтеме",
+        copied: "Көшірілді!",
+        astroObject: "АСТРОНОМИЯЛЫҚ НЫСАН",
+        funFactTitle: "ҚЫЗЫҚТЫ ДЕРЕК (ҒЫЛЫМ ЖӘНЕ САЛЫСТЫРУ)",
+        analysisModes: "ТАЛДАУ РЕЖИМДЕРІ",
+        imgSub: "Кадрларды азайту (Subtraction)",
+        catalogs: "Gaia DR3 / WISE Каталогтары",
+        pmVectors: "Өзіндік қозғалыс векторлары",
+        autoDetect: "Қозғалатын нысандарды автоіздеу",
+        circleTool: "Шеңбер сызу құралы (Аспанды басыңыз)",
+        fovLabel: "Көру өрісі (FOV Масштаб)",
+        lightCurve: "Жарықтық қисығы (Light Curve)",
+        spectrometer: "102-BAND ИҚ СПЕКТРОМЕТР",
+        activeBand: "Белсенді аймақ",
+        discoveryLog: "АШУДЫ ТІРКЕУ (DISCOVERY LOG)",
+        exportJson: "JSON Есеп",
+        logBtn: "Жаңалықты тіркеу",
+        loggedOk: "Жаңалық тіркелді!",
+        beginnerHint: "Қарапайым түсіндірме алу үшін кез келген жұлдызды, шеңберді немесе спектрді басыңыз",
+        guideTitle: "Жас астрономға арналған гид",
+        close: "Жабу",
+        astrometryShift: "Астрометриялық ығысу",
+        autoFoundMsg: "Автоіздеу 2 қозғалатын нысанды тапты: Негізгі нысан + Жаңа кандидат #1!",
+        classOptions: ["Қозғалатын астероид / NEO", "Қоңыр ергежейлі кандидаты", "Айнымалы жұлдыз / Экзопланета транзиті", "Комета белсенділігі"],
+        guideDict: {
+          target: { title: "Бақыланатын негізгі нысан", desc: "SPHEREx телескопы әр 6 ай сайын бақылайтын нысан. Үзік сызық оның алыс жұлдыздар аясында қалай жылжығанын көрсетеді." },
+          candidate: { title: "Жаңа қозғалатын нысан табылды!", desc: "Автоіздеу алгоритмі Gaia/WISE каталогтарында жоқ, уақыт өте орнын ауыстыратын нысанды тапты. Бұл жаңа астероид немесе қоңыр ергежейлі болуы мүмкін!" },
+          star: { title: "Алыс фондық жұлдыз", desc: "Gaia DR3 немесе WISE каталогындағы алыс жұлдыз. Өте алыс орналасқандықтан қозғалмайтын бағдар ретінде қолданылады." },
+          circle: { title: "Бақылау шеңбері", desc: "Сіз бұл аймақты шеңбермен белгіледіңіз! Астрономдар қозғалатын немесе жарықтығы өзгеретін нысандарды тексеру үшін осылай белгілейді." },
+          spectrum: { title: "102-жолақты ИҚ спектр", desc: "SPHEREx инфрақызыл сәулені 102 жолаққа бөледі. Графиктегі төмендеулер нысанда су мұзы (H2O) немесе метан (CH4) бар екенін білдіреді!" },
+          lightcurve: { title: "Жарықтық қисығы графигі", desc: "Нысан жарықтығының 6 ай сайын қалай өзгеретінін көрсетеді. Жарықтықтың күрт төмендеуі жұлдыз алдынан экзопланета өткенін білдіруі мүмкін." }
+        }
+      }
+    };
+
+    // Встроенные резервные данные (работают мгновенно даже без запущенного бэкенда)
+    const FALLBACK_TARGETS = {
+      wise0855: {
+        id: "wise0855", name: "WISE 0855 (Brown Dwarf)", ra_str: "08h55m10.831s", dec_str: "-7d14m42.53s",
+        ra_deg: 133.79513, dec_deg: -7.24515, pm_ra: -8.1, pm_dec: 0.7,
+        molecules: "Water Ice & Methane (H2O, CH4)", flag: "CLEAN (0x00)",
+        category: { en: "Fast-moving Cold Brown Dwarf", ru: "Быстродвижущийся холодный коричневый карлик", kk: "Жылдам қозғалатын суық қоңыр ергежейлі" },
+        fact: {
+          en: "WISE 0855 is the coldest known brown dwarf (-23°C) — as chilly as Earth's North Pole, yet 3–10x more massive than Jupiter, drifting just 7.4 light-years away.",
+          ru: "WISE 0855 — самый холодный из известных коричневых карликов (-23°C), холодный как Северный полюс Земли, но в 3–10 раз массивнее Юпитера (7.4 св. года от нас).",
+          kk: "WISE 0855 — белгілі ең суық қоңыр ергежейлі (-23°C), Жердің Солтүстік полюсіндей суық, бірақ Юпитерден 3-10 есе ауыр (7.4 жарық жылы қашықтықта)."
+        },
+        light_curve: [1.000, 1.048, 1.026, 0.966], profile: "ch4_h2o"
+      },
+      barnard: {
+        id: "barnard", name: "Barnard's Star", ra_str: "17h57m48.498s", dec_str: "+04d41m36.11s",
+        ra_deg: 269.45207, dec_deg: 4.69336, pm_ra: -0.80, pm_dec: 10.36,
+        molecules: "Water Vapor & Iron Hydride (H2O, FeH)", flag: "CLEAN (0x00)",
+        category: { en: "High-Proper-Motion Red Dwarf", ru: "Красный карлик с рекордным движением", kk: "Өзіндік қозғалысы өте жоғары қызыл ергежейлі" },
+        fact: {
+          en: "Barnard's Star moves across Earth's sky faster than any other star — crossing the width of a full Moon every 180 years. It hosts a sub-Earth exoplanet (Barnard b).",
+          ru: "Звезда Барнарда мчится по небу быстрее всех звезд — диаметр полной Луны за 180 лет. Вокруг нее вращается экзопланета легче Земли с годом в 3.15 дня.",
+          kk: "Барнард жұлдызы аспанда барлық жұлдыздардан жылдам қозғалады — 180 жылда толық Ай диаметрін өтеді. Оны Жерден жеңіл экзопланета айналып жүреді."
+        },
+        light_curve: [1.000, 0.992, 1.015, 0.988], profile: "red_dwarf"
+      },
+      eps_indi: {
+        id: "eps_indi", name: "Epsilon Indi B", ra_str: "22h04m10.520s", dec_str: "-56d46m57.70s",
+        ra_deg: 331.04383, dec_deg: -56.78269, pm_ra: 3.96, pm_dec: -2.53,
+        molecules: "Ammonia, Methane & CO (NH3, CH4)", flag: "BINARY_BLEND (0x02)",
+        category: { en: "Binary Brown Dwarf System", ru: "Двойная система коричневых карликов", kk: "Қос қоңыр ергежейлілер жүйесі" },
+        fact: {
+          en: "Epsilon Indi B is a pair of 'failed stars' orbiting each other every 11 years while together circling an orange star 11.9 light-years from Earth.",
+          ru: "Эпсилон Индейца B — пара «неудавшихся звезд», вращающихся друг вокруг друга за 11 лет вокруг оранжевой звезды в 11.9 св. годах от Земли.",
+          kk: "Эпсилон Үнді B — бір-бірін 11 жылда айналатын екі «сәтсіз жұлдыз» жұбы, Жерден 11.9 жарық жылы қашықтықта орналасқан."
+        },
+        light_curve: [1.000, 1.031, 0.974, 1.019], profile: "nh3_ch4"
+      },
+      rw_aur: {
+        id: "rw_aur", name: "RW Aurigae", ra_str: "05h07m49.538s", dec_str: "+30d24m05.07s",
+        ra_deg: 76.95641, dec_deg: 30.40141, pm_ra: 0.01, pm_dec: -0.02,
+        molecules: "Silicate Dust, H2O & CO Emission", flag: "DISK_VAR (0x04)",
+        category: { en: "Young Variable Star", ru: "Молодая переменная звезда с диском", kk: "Шаңды дискісі бар жас айнымалы жұлдыз" },
+        fact: {
+          en: "Only a few million years old, RW Aurigae is periodically eclipsed by giant clouds of planet-forming dust, causing sharp infrared brightness drops.",
+          ru: "Возраст RW Возничего — всего пара миллионов лет. Облака протопланетной пыли периодически затмевают её, вызывая резкие падения блеска.",
+          kk: "RW Арбакеш небәрі бірнеше миллион жаста. Протопланеталық шаң бұлттары оны мезгіл-мезгіл көлегейлеп, жарықтығын күрт өзгертеді."
+        },
+        light_curve: [1.000, 0.640, 1.180, 0.790], profile: "silicate_disk"
+      },
+      r_draconis: {
+        id: "r_draconis", name: "R Draconis", ra_str: "16h32m40.230s", dec_str: "+66d45m17.90s",
+        ra_deg: 248.16762, dec_deg: 66.75497, pm_ra: -0.01, pm_dec: 0.01,
+        molecules: "Water Vapor & CO (H2O, CO)", flag: "BRIGHT_SAT (0x01)",
+        category: { en: "Mira Pulsating Red Giant", ru: "Пульсирующий красный гигант Мира", kk: "Мира типті пульсацияланатын қызыл алып" },
+        fact: {
+          en: "R Draconis swells and shrinks every 245 days, changing its brightness by over 100x while shedding water-rich gas into interstellar space.",
+          ru: "R Дракона раздувается и сжимается каждые 245 дней, меняя яркость более чем в 100 раз и выбрасывая в космос богатый водой газ.",
+          kk: "R Айдаһар әр 245 күн сайын ісініп, кішірейеді, жарықтығын 100 еседен астам өзгертіп, ғарышқа суға бай газ шашады."
+        },
+        light_curve: [1.000, 1.420, 0.580, 1.290], profile: "mira_giant"
+      }
+    };
+
+    function buildSpectrum(profile) {
+      const arr = [];
+      for (let i = 0; i < 102; i++) {
+        const wl = +(0.75 * Math.pow(5.0 / 0.75, i / 101)).toFixed(3);
+        let base = 0.74 + 0.11 * Math.sin(i * 0.19);
+        if (profile === "ch4_h2o") {
+          if (Math.abs(wl - 1.4) < 0.13 || Math.abs(wl - 1.9) < 0.15 || Math.abs(wl - 2.7) < 0.18) base -= 0.34;
+          if (Math.abs(wl - 3.32) < 0.22) base -= 0.38;
+        } else if (profile === "red_dwarf") {
+          base = 0.88 - (wl - 0.75) * 0.08 + 0.06 * Math.cos(i * 0.25);
+        } else if (profile === "nh3_ch4") {
+          if (Math.abs(wl - 1.52) < 0.13 || Math.abs(wl - 2.25) < 0.16) base -= 0.30;
+        } else if (profile === "silicate_disk") {
+          base = 0.52 + (wl / 5.0) * 0.40;
+        } else if (profile === "mira_giant") {
+          base = 0.80 + 0.15 * Math.sin(i * 0.12);
+        }
+        arr.push({ band: i + 1, wl, array: Math.min(6, Math.floor(i / 17) + 1), flux: Math.max(0.15, Math.min(0.96, base)) });
+      }
+      return arr;
+    }
+
+    function App() {
+      // Читаем параметры из URL (поддержка требования NASA по встраиванию координат в URL)
+      const params = new URLSearchParams(window.location.search);
+      const initialTarget = FALLBACK_TARGETS[params.get("target")] ? params.get("target") : "wise0855";
+
+      const [lang, setLang] = useState("kk"); // По умолчанию как на фото (с мгновенным переключением KZ/RU/EN)
+      const t = I18N[lang];
+
+      const [targetId, setTargetId] = useState(initialTarget);
+      const [raInput, setRaInput] = useState(FALLBACK_TARGETS[initialTarget].ra_str);
+      const [decInput, setDecInput] = useState(FALLBACK_TARGETS[initialTarget].dec_str);
+      const [fov, setFov] = useState(1.0);
+
+      // Таймлайн эпох (0..3) и воспроизведение
+      const [epoch, setEpoch] = useState(2);
+      const [playing, setPlaying] = useState(true);
+      const [speed, setSpeed] = useState(1);
+
+      // Режимы анализа
+      const [imgSubtraction, setImgSubtraction] = useState(false);
+      const [showCatalogs, setShowCatalogs] = useState(true);
+      const [showVectors, setShowVectors] = useState(true);
+      const [autoDetect, setAutoDetect] = useState(false);
+      const [circleMode, setCircleMode] = useState(true);
+
+      // Спектрометр и детекторные решетки (1..6)
+      const [activeArray, setActiveArray] = useState(2);
+      const [selectedBandIdx, setSelectedBandIdx] = useState(32);
+
+      // Кружки, нарисованные пользователем вокруг объектов, и гид для новичков
+      const [userCircles, setUserCircles] = useState([]);
+      const [guideModal, setGuideModal] = useState(null);
+      const [discoveryClass, setDiscoveryClass] = useState(0);
+      const [toast, setToast] = useState("");
+
+      const target = FALLBACK_TARGETS[targetId];
+      const spectrum = useMemo(() => buildSpectrum(target.profile), [targetId]);
+      const epochsLabels = ["2025-05 (Epoch 1)", "2025-11 (Epoch 2)", "2026-05 (Epoch 3)", "2026-11 (Epoch 4)"];
+
+      // Смена объекта
+      const handleSelectTarget = (id) => {
+        setTargetId(id);
+        setRaInput(FALLBACK_TARGETS[id].ra_str);
+        setDecInput(FALLBACK_TARGETS[id].dec_str);
+        setUserCircles([]);
+        const url = new URL(window.location);
+        url.searchParams.set("target", id);
+        url.searchParams.set("ra", FALLBACK_TARGETS[id].ra_str);
+        url.searchParams.set("dec", FALLBACK_TARGETS[id].dec_str);
+        window.history.replaceState({}, "", url);
+      };
+
+      // Анимация таймлайна
+      useEffect(() => {
+        if (!playing) return;
+        const timer = setInterval(() => {
+          setEpoch((prev) => (prev + 1) % 4);
+        }, 1400 / speed);
+        return () => clearInterval(timer);
+      }, [playing, speed]);
+
+      const showNotification = (msg) => {
+        setToast(msg);
+        setTimeout(() => setToast(""), 3000);
+      };
+
+      // ==========================================
+      // 3D СЦЕНА НЕБА (THREE.JS) С ВРАЩЕНИЕМ И ЗУМОМ
+      // ==========================================
+      const canvasContainerRef = useRef(null);
+      const sceneStateRef = useRef({
+        epoch, imgSubtraction, showCatalogs, showVectors, autoDetect, circleMode, fov, targetId, userCircles, lang
+      });
+      useEffect(() => {
+        sceneStateRef.current = { epoch, imgSubtraction, showCatalogs, showVectors, autoDetect, circleMode, fov, targetId, userCircles, lang };
+      }, [epoch, imgSubtraction, showCatalogs, showVectors, autoDetect, circleMode, fov, targetId, userCircles, lang]);
+
+      useEffect(() => {
+        const container = canvasContainerRef.current;
+        if (!container) return;
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera.position.set(0, 0, 7.5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.innerHTML = "";
+        container.appendChild(renderer.domElement);
+
+        // Координатная 3D-сфера / сетка RA-DEC
+        const gridGroup = new THREE.Group();
+        const gridHelper = new THREE.GridHelper(10, 20, 0x1e293b, 0x0f172a);
+        gridHelper.rotation.x = Math.PI / 2;
+        gridGroup.add(gridHelper);
+        scene.add(gridGroup);
+
+        // Фоновые звезды (Gaia / WISE)
+        const starsGroup = new THREE.Group();
+        const bgStarsData = [];
+        for (let i = 0; i < 110; i++) {
+          const x = (Math.sin(i * 78.233) * 43758.5453 % 1 - 0.5) * 9.5;
+          const y = (Math.cos(i * 19.13) * 19283.23 % 1 - 0.5) * 6.5;
+          const z = ((i % 7) - 3) * 0.25;
+          const geo = new THREE.SphereGeometry(i % 5 === 0 ? 0.045 : 0.025, 12, 12);
+          const mat = new THREE.MeshBasicMaterial({ color: i % 3 === 0 ? 0x93c5fd : 0xe2e8f0 });
+          const mesh = new THREE.Mesh(geo, mat);
+          mesh.position.set(x, y, z);
+          mesh.userData = { type: "star", index: i };
+          starsGroup.add(mesh);
+
+          // Каталожное кольцо вокруг опорных звезд
+          const ringGeo = new THREE.RingGeometry(0.08, 0.095, 24);
+          const ringMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.45 });
+          const ring = new THREE.Mesh(ringGeo, ringMat);
+          ring.position.set(x, y, z);
+          starsGroup.add(ring);
+          bgStarsData.push({ mesh, ring });
+        }
+        gridGroup.add(starsGroup);
+
+        // Главный наблюдаемый объект (Target)
+        const targetGeo = new THREE.SphereGeometry(0.13, 24, 24);
+        const targetMat = new THREE.MeshBasicMaterial({ color: 0xfde68a });
+        const targetMesh = new THREE.Mesh(targetGeo, targetMat);
+        targetMesh.userData = { type: "target" };
+        gridGroup.add(targetMesh);
+
+        // Внешнее свечение / кольцо выделения цели
+        const targetHaloGeo = new THREE.RingGeometry(0.19, 0.22, 32);
+        const targetHaloMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24, side: THREE.DoubleSide });
+        const targetHalo = new THREE.Mesh(targetHaloGeo, targetHaloMat);
+        gridGroup.add(targetHalo);
+
+        // Пунктирная траектория собственного движения (4 эпохи)
+        const lineMat = new THREE.LineDashedMaterial({ color: 0x67e8f9, dashSize: 0.12, gapSize: 0.08 });
+        const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-0.6, 0.3, 0), new THREE.Vector3(0.8, -0.4, 0)]);
+        const trajectoryLine = new THREE.Line(lineGeo, lineMat);
+        gridGroup.add(trajectoryLine);
+
+        // Скрытый движущийся объект для функции "Автопоиск"
+        const candGeo = new THREE.SphereGeometry(0.085, 20, 20);
+        const candMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e });
+        const candMesh = new THREE.Mesh(candGeo, candMat);
+        candMesh.userData = { type: "candidate" };
+        gridGroup.add(candMesh);
+
+        const candRingGeo = new THREE.RingGeometry(0.16, 0.20, 32);
+        const candRingMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e, side: THREE.DoubleSide });
+        const candRing = new THREE.Mesh(candRingGeo, candRingMat);
+        gridGroup.add(candRing);
+
+        // Группа пользовательских окружностей
+        const circlesGroup = new THREE.Group();
+        gridGroup.add(circlesGroup);
+
+        // 3D Вращение мышью + Клик для рисования круга или открытия Гида новичка
+        let isDragging = false;
+        let prevMouse = { x: 0, y: 0 };
+        let dragDistance = 0;
+
+        const onMouseDown = (e) => {
+          isDragging = true;
+          dragDistance = 0;
+          prevMouse = { x: e.clientX, y: e.clientY };
+        };
+
+        const onMouseMove = (e) => {
+          if (!isDragging) return;
+          const dx = e.clientX - prevMouse.x;
+          const dy = e.clientY - prevMouse.y;
+          dragDistance += Math.hypot(dx, dy);
+          gridGroup.rotation.y += dx * 0.006;
+          gridGroup.rotation.x += dy * 0.006;
+          prevMouse = { x: e.clientX, y: e.clientY };
+        };
+
+        const onMouseUp = (e) => {
+          isDragging = false;
+          if (dragDistance > 6) return; // Это было 3D вращение, а не клик
+
+          const rect = renderer.domElement.getBoundingClientRect();
+          const mouse = new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -((e.clientY - rect.top) / rect.height) * 2 + 1
+          );
+          const raycaster = new THREE.Raycaster();
+          raycaster.setFromCamera(mouse, camera);
+
+          const st = sceneStateRef.current;
+          const dict = I18N[st.lang].guideDict;
+
+          // Проверяем клик по объектам для Гида новичков
+          const hits = raycaster.intersectObjects([targetMesh, candMesh, ...starsGroup.children]);
+          if (hits.length > 0) {
+            const hitType = hits[0].object.userData.type;
+            if (hitType && dict[hitType]) {
+              setGuideModal(dict[hitType]);
+              return;
+            }
+          }
+
+          // Если включен инструмент "Рисование окружности", ставим круг в точку клика на плоскости неба
+          if (st.circleMode) {
+            const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+            const pt = new THREE.Vector3();
+            raycaster.ray.intersectPlane(plane, pt);
+            gridGroup.worldToLocal(pt);
+            setUserCircles((prev) => [...prev, { id: Date.now(), x: pt.x, y: pt.y, z: pt.z }]);
+            setGuideModal(dict.circle);
+          }
+        };
+
+        const dom = renderer.domElement;
+        dom.addEventListener("mousedown", onMouseDown);
+        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("mouseup", onMouseUp);
+
+        let animId;
+        const animate = () => {
+          animId = requestAnimationFrame(animate);
+          const st = sceneStateRef.current;
+          const curTarget = FALLBACK_TARGETS[st.targetId];
+
+          // Масштаб FOV
+          const zoomScale = 1.0 / Math.sqrt(st.fov);
+          gridGroup.scale.set(zoomScale, zoomScale, zoomScale);
+
+          // Вычитание кадров (Image Subtraction): неподвижные звезды гаснут, движущиеся ярко горят!
+          bgStarsData.forEach(({ mesh, ring }) => {
+            mesh.visible = !st.imgSubtraction;
+            ring.visible = st.showCatalogs && !st.imgSubtraction;
+          });
+
+          // Позиция главного объекта в зависимости от выбранной эпохи (0..3)
+          const tNorm = (st.epoch - 1.5) * 0.42;
+          const dirX = curTarget.pm_ra < 0 ? 1 : -1;
+          const dirY = curTarget.pm_dec < 0 ? -1 : 1;
+          const tx = tNorm * dirX * (Math.abs(curTarget.pm_ra) > 0.2 ? 1.1 : 0.15);
+          const ty = tNorm * dirY * (Math.abs(curTarget.pm_dec) > 0.2 ? 0.75 : 0.15);
+
+          // Изменение размера от кривой блеска
+          const fluxScale = curTarget.light_curve[st.epoch] || 1.0;
+          targetMesh.position.set(tx, ty, 0.05);
+          targetMesh.scale.setScalar(fluxScale);
+          targetHalo.position.set(tx, ty, 0.05);
+          targetHalo.rotation.z += 0.02;
+
+          // Вектор траектории
+          trajectoryLine.visible = st.showVectors;
+          const startPt = new THREE.Vector3(-1.5 * 0.42 * dirX * (Math.abs(curTarget.pm_ra) > 0.2 ? 1.1 : 0.15), -1.5 * 0.42 * dirY * (Math.abs(curTarget.pm_dec) > 0.2 ? 0.75 : 0.15), 0.04);
+          const endPt = new THREE.Vector3(1.5 * 0.42 * dirX * (Math.abs(curTarget.pm_ra) > 0.2 ? 1.1 : 0.15), 1.5 * 0.42 * dirY * (Math.abs(curTarget.pm_dec) > 0.2 ? 0.75 : 0.15), 0.04);
+          trajectoryLine.geometry.setFromPoints([startPt, endPt]);
+          trajectoryLine.computeLineDistances();
+
+          // Автопоиск движущихся объектов (показывает скрытого кандидата)
+          candMesh.visible = st.autoDetect || st.imgSubtraction;
+          candRing.visible = st.autoDetect;
+          const cx = -1.1 + st.epoch * 0.48;
+          const cy = 0.85 - st.epoch * 0.34;
+          candMesh.position.set(cx, cy, 0.08);
+          candRing.position.set(cx, cy, 0.08);
+          candRing.scale.setScalar(1 + 0.15 * Math.sin(Date.now() * 0.008));
+
+          // Перерисовка пользовательских окружностей
+          while (circlesGroup.children.length > 0) circlesGroup.remove(circlesGroup.children[0]);
+          st.userCircles.forEach((c) => {
+            const uRingGeo = new THREE.RingGeometry(0.22, 0.25, 32);
+            const uRingMat = new THREE.MeshBasicMaterial({ color: 0x34d399, side: THREE.DoubleSide });
+            const uRing = new THREE.Mesh(uRingGeo, uRingMat);
+            uRing.position.set(c.x, c.y, c.z + 0.06);
+            circlesGroup.add(uRing);
+          });
+
+          renderer.render(scene, camera);
+        };
+        animate();
+
+        const handleResize = () => {
+          if (!container) return;
+          camera.aspect = container.clientWidth / container.clientHeight;
+          camera.updateProjectionMatrix();
+          renderer.setSize(container.clientWidth, container.clientHeight);
+        };
+        window.addEventListener("resize", handleResize);
+
+        return () => {
+          cancelAnimationFrame(animId);
+          dom.removeEventListener("mousedown", onMouseDown);
+          window.removeEventListener("mousemove", onMouseMove);
+          window.removeEventListener("mouseup", onMouseUp);
+          window.removeEventListener("resize", handleResize);
+        };
+      }, []);
+
+      // Экспорт JSON открытия
+      const handleExportDiscovery = () => {
+        const report = {
+          mission: "NASA SPHEREx 2026",
+          target: target.name,
+          ra: raInput,
+          dec: decInput,
+          epoch_observed: epochsLabels[epoch],
+          classification: t.classOptions[discoveryClass],
+          circled_coordinates: userCircles,
+          contamination_flag: target.flag
+        };
+        const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `SPHEREx_Discovery_${target.id}.json`;
+        a.click();
+        showNotification(t.loggedOk);
+      };
+
+      const selectedBand = spectrum[selectedBandIdx] || spectrum[32];
+
+      return (
+        <div className="min-h-screen flex flex-col justify-between p-3 gap-3 select-none">
+          {/* ВЕРХНЯЯ ПАНЕЛЬ НАВИГАЦИИ */}
+          <header className="glass-panel rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 neon-border">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-indigo-600/30 border border-indigo-400/50 flex items-center justify-center text-indigo-300 font-bold text-lg">
+                ✦
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold tracking-wide text-white text-base">SPHEREX <span className="text-indigo-400">CHRONOS</span></span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">102-BAND LIVE</span>
+                </div>
+                <p className="text-[11px] text-slate-400">{t.subtitle}</p>
+              </div>
+            </div>
+
+            {/* Координаты RA / DEC и Поиск */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center bg-slate-900/90 border border-slate-700 rounded-lg px-2.5 py-1 text-xs">
+                <span className="text-slate-400 mr-1.5">RA:</span>
+                <input value={raInput} onChange={(e) => setRaInput(e.target.value)} className="bg-transparent text-cyan-300 font-mono w-28 focus:outline-none" />
+              </div>
+              <div className="flex items-center bg-slate-900/90 border border-slate-700 rounded-lg px-2.5 py-1 text-xs">
+                <span className="text-slate-400 mr-1.5">DEC:</span>
+                <input value={decInput} onChange={(e) => setDecInput(e.target.value)} className="bg-transparent text-cyan-300 font-mono w-28 focus:outline-none" />
+              </div>
+              <button onClick={() => showNotification(`${raInput} | ${decInput}`)} className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg transition">
+                🔍 {t.searchBtn}
+              </button>
+              <button onClick={() => { navigator.clipboard.writeText(window.location.href); showNotification(t.copied); }} className="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs px-3 py-1.5 rounded-lg transition">
+                🔗 {t.shareBtn}
+              </button>
+
+              {/* Переключатель 3 языков: Қазақша / Русский / English */}
+              <div className="flex bg-slate-900 border border-slate-700 rounded-lg p-0.5 text-xs font-bold">
+                {["kk", "ru", "en"].map((code) => (
+                  <button
+                    key={code}
+                    onClick={() => setLang(code)}
+                    className={`px-2.5 py-1 rounded-md uppercase transition ${lang === code ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white"}`}
+                  >
+                    {code === "kk" ? "ҚАЗ" : code === "ru" ? "РУС" : "ENG"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </header>
+
+          {/* ПАНЕЛЬ БЫСТРОГО ВЫБОРА 5 ОБЪЕКТОВ ИЗ ЗАДАНИЯ NASA */}
+          <div className="flex flex-wrap items-center gap-2">
+            {Object.values(FALLBACK_TARGETS).map((item) => (
+              <button
+                key={item.id}
+                onClick={() => handleSelectTarget(item.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition flex items-center gap-2 ${
+                  targetId === item.id
+                    ? "bg-indigo-600/30 border-indigo-400 text-white shadow-md shadow-indigo-500/20"
+                    : "glass-panel text-slate-300 hover:border-slate-500"
+                }`}
+              >
+                <span>{item.name}</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">{item.flag.split(" ")[0]}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* ОСНОВНАЯ РАБОЧАЯ ОБЛАСТЬ (3 КОЛОНКИ КАК НА СКРИНШОТЕ) */}
+          <main className="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-1">
+            
+            {/* ЛЕВАЯ КОЛОНКА: Карточка объекта, Интересный факт, Режимы анализа, Кривая блеска */}
+            <aside className="lg:col-span-3 glass-panel rounded-xl p-3.5 flex flex-col justify-between gap-3">
+              <div>
+                <div className="flex justify-between items-start text-[10px] text-indigo-300 font-bold tracking-wider uppercase">
+                  <span>{t.astroObject}</span>
+                  <span className="font-mono text-slate-400">{target.ra_deg}° | {target.dec_deg}°</span>
+                </div>
+                <h2 className="text-base font-bold text-white mt-0.5">{target.name}</h2>
+                <p className="text-xs text-slate-400">{target.category[lang]}</p>
+
+                <div className="mt-2 px-2.5 py-1.5 rounded-lg bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 text-xs font-medium">
+                  🧪 {target.molecules}
+                </div>
+
+                {/* Окошко с интересными научными фактами о выбранном объекте */}
+                <div className="mt-2.5 p-2.5 rounded-lg bg-amber-500/10 border border-amber-400/30">
+                  <div className="text-[10px] font-bold text-amber-300 uppercase mb-1">💡 {t.funFactTitle}</div>
+                  <p className="text-[11px] leading-relaxed text-amber-100/90">{target.fact[lang]}</p>
+                </div>
+              </div>
+
+              {/* Режимы анализа */}
+              <div className="space-y-2">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{t.analysisModes}</div>
+                
+                <button onClick={() => setImgSubtraction(!imgSubtraction)} className={`w-full flex justify-between items-center px-3 py-2 rounded-lg text-xs font-medium border transition ${imgSubtraction ? "bg-rose-500/20 border-rose-400 text-rose-200" : "bg-slate-900/70 border-slate-700 text-slate-300"}`}>
+                  <span>👁 {t.imgSub}</span>
+                  <span className="font-bold">{imgSubtraction ? "ON" : "OFF"}</span>
+                </button>
+
+                <button onClick={() => setShowCatalogs(!showCatalogs)} className={`w-full flex justify-between items-center px-3 py-2 rounded-lg text-xs font-medium border transition ${showCatalogs ? "bg-sky-500/20 border-sky-400 text-sky-200" : "bg-slate-900/70 border-slate-700 text-slate-300"}`}>
+                  <span>🗂 {t.catalogs}</span>
+                  <span className="font-bold">{showCatalogs ? "ON" : "OFF"}</span>
+                </button>
+
+                <button onClick={() => setShowVectors(!showVectors)} className={`w-full flex justify-between items-center px-3 py-2 rounded-lg text-xs font-medium border transition ${showVectors ? "bg-emerald-500/20 border-emerald-400 text-emerald-200" : "bg-slate-900/70 border-slate-700 text-slate-300"}`}>
+                  <span>↗ {t.pmVectors}</span>
+                  <span className="font-bold">{showVectors ? "ON" : "OFF"}</span>
+                </button>
+
+                <button onClick={() => { const next = !autoDetect; setAutoDetect(next); if (next) showNotification(t.autoFoundMsg); }} className={`w-full flex justify-between items-center px-3 py-2 rounded-lg text-xs font-medium border transition ${autoDetect ? "bg-amber-500/25 border-amber-400 text-amber-200" : "bg-slate-900/70 border-slate-700 text-slate-300"}`}>
+                  <span>🎯 {t.autoDetect}</span>
+                  <span className="font-bold">{autoDetect ? "ACTIVE" : "SCAN"}</span>
+                </button>
+
+                <div className="flex gap-1.5">
+                  <button onClick={() => setCircleMode(!circleMode)} className={`flex-1 flex justify-between items-center px-3 py-2 rounded-lg text-xs font-medium border transition ${circleMode ? "bg-indigo-500/25 border-indigo-400 text-indigo-200" : "bg-slate-900/70 border-slate-700 text-slate-300"}`}>
+                    <span>⭕ {t.circleTool}</span>
+                  </button>
+                  {userCircles.length > 0 && (
+                    <button onClick={() => setUserCircles([])} className="px-2.5 py-2 rounded-lg bg-slate-800 text-xs text-slate-300 hover:text-white" title="Clear circles">✕</button>
+                  )}
+                </div>
+
+                {/* Слайдер FOV */}
+                <div className="pt-1">
+                  <div className="flex justify-between text-xs text-slate-300 mb-1">
+                    <span>{t.fovLabel}</span>
+                    <span className="font-mono text-indigo-300">{fov.toFixed(1)}° × {fov.toFixed(1)}°</span>
+                  </div>
+                  <input type="range" min="0.5" max="3.0" step="0.1" value={fov} onChange={(e) => setFov(parseFloat(e.target.value))} className="w-full" />
+                </div>
+              </div>
+
+              {/* Кривые блеска (Light Curve) по эпохам + SVG график */}
+              <div onClick={() => setGuideModal(t.guideDict.lightcurve)} className="cursor-pointer bg-slate-900/80 border border-slate-700/80 rounded-lg p-2.5 hover:border-indigo-400/50 transition">
+                <div className="flex justify-between items-center text-xs mb-1.5">
+                  <span className="font-semibold text-slate-200">📈 {t.lightCurve}</span>
+                  <span className="font-mono text-indigo-400 font-bold">{target.light_curve[epoch].toFixed(3)}x</span>
+                </div>
+                <svg viewBox="0 0 200 42" className="w-full h-9 mb-1.5 overflow-visible">
+                  <polyline
+                    fill="none"
+                    stroke="#818cf8"
+                    strokeWidth="2.5"
+                    points={target.light_curve.map((v, i) => `${20 + i * 53},${38 - (v - 0.5) * 32}`).join(" ")}
+                  />
+                  {target.light_curve.map((v, i) => (
+                    <circle key={i} cx={20 + i * 53} cy={38 - (v - 0.5) * 32} r={epoch === i ? 4.5 : 3} fill={epoch === i ? "#38bdf8" : "#818cf8"} />
+                  ))}
+                </svg>
+                <div className="grid grid-cols-4 gap-1 text-center">
+                  {target.light_curve.map((val, idx) => (
+                    <div key={idx} className={`py-1 rounded text-[10px] font-mono ${epoch === idx ? "bg-indigo-600 text-white font-bold" : "bg-slate-800 text-slate-400"}`}>
+                      <div>Ep {idx + 1}</div>
+                      <div>{val}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </aside>
+
+            {/* ЦЕНТРАЛЬНАЯ 3D-ОБЛАСТЬ НЕБА (THREE.JS) */}
+            <section className="lg:col-span-6 glass-panel rounded-xl relative overflow-hidden min-h-[430px] flex flex-col justify-between neon-border">
+              <div ref={canvasContainerRef} className="absolute inset-0 cursor-crosshair" />
+
+              {/* Подсказка для новичков сверху холста */}
+              <div className="relative z-10 m-3 flex justify-between items-center pointer-events-none">
+                <span className="px-3 py-1 rounded-full bg-slate-950/80 border border-slate-700 text-[11px] text-slate-300">
+                  🧭 3D Drag to Rotate • Click Object for Beginner Guide
+                </span>
+                <span className="px-2.5 py-1 rounded bg-slate-950/80 border border-slate-700 text-[11px] font-mono text-cyan-300">
+                  {epochsLabels[epoch]}
+                </span>
+              </div>
+
+              {/* Модальное мини-окно "Гид для новичков" при клике на элемент */}
+              {guideModal && (
+                <div className="relative z-20 m-4 p-4 rounded-xl bg-slate-950/95 border border-indigo-400 shadow-2xl max-w-md self-center">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-400">🎓 {t.guideTitle}</span>
+                    <button onClick={() => setGuideModal(null)} className="text-xs text-slate-400 hover:text-white">✕ {t.close}</button>
+                  </div>
+                  <h4 className="text-sm font-bold text-white mb-1">{guideModal.title}</h4>
+                  <p className="text-xs text-slate-300 leading-relaxed">{guideModal.desc}</p>
+                </div>
+              )}
+
+              <div className="relative z-10 m-3 text-[11px] text-slate-400 pointer-events-none">
+                💡 {t.beginnerHint}
+              </div>
+            </section>
+
+            {/* ПРАВАЯ КОЛОНКА: 102-Band ИК Спектрометр и Журнал открытий */}
+            <aside className="lg:col-span-3 glass-panel rounded-xl p-3.5 flex flex-col justify-between gap-3">
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-bold text-slate-200">〰 {t.spectrometer}</span>
+                  <span className="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-amber-300 font-mono text-xs font-bold">
+                    {selectedBand.wl} µm
+                  </span>
+                </div>
+
+                {/* 6 детекторных решеток SPHEREx */}
+                <div className="grid grid-cols-3 gap-1.5 mb-2.5">
+                  {[
+                    { id: 1, range: "0.75-1.11 µm" },
+                    { id: 2, range: "1.11-1.64 µm" },
+                    { id: 3, range: "1.64-2.42 µm" },
+                    { id: 4, range: "2.42-3.82 µm" },
+                    { id: 5, range: "3.82-4.42 µm" },
+                    { id: 6, range: "4.42-5.00 µm" }
+                  ].map((arr) => (
+                    <button
+                      key={arr.id}
+                      onClick={() => { setActiveArray(arr.id); setSelectedBandIdx((arr.id - 1) * 17 + 8); }}
+                      className={`p-1.5 rounded-lg border text-left transition ${
+                        activeArray === arr.id ? "bg-amber-500/20 border-amber-400 text-amber-200" : "bg-slate-900/70 border-slate-700 text-slate-400"
+                      }`}
+                    >
+                      <div className="text-[11px] font-bold">Array {arr.id}</div>
+                      <div className="text-[9px] font-mono">{arr.range}</div>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="px-2.5 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 mb-2">
+                  {t.activeBand}: <span className="font-bold">{target.molecules}</span>
+                </div>
+
+                {/* Интерактивный график 102 спектральных полос (Спектр по клику) */}
+                <div
+                  onClick={() => setGuideModal(t.guideDict.spectrum)}
+                  className="bg-slate-950/90 border border-slate-800 rounded-lg p-2.5 cursor-pointer hover:border-amber-400/50 transition"
+                >
+                  <svg viewBox="0 0 306 100" className="w-full h-28">
+                    <polyline
+                      fill="none"
+                      stroke="#f59e0b"
+                      strokeWidth="2"
+                      points={spectrum.map((b, i) => `${i * 3},${95 - b.flux * 85}`).join(" ")}
+                    />
+                    <line x1={selectedBandIdx * 3} y1="0" x2={selectedBandIdx * 3} y2="100" stroke="#38bdf8" strokeDasharray="3,3" strokeWidth="1.5" />
+                    <circle cx={selectedBandIdx * 3} cy={95 - selectedBand.flux * 85} r="4" fill="#38bdf8" />
+                  </svg>
+                  <div className="flex justify-between text-[10px] font-mono text-slate-400 mt-1">
+                    <span>0.75 µm (Band 1)</span>
+                    <span className="text-cyan-300">Band #{selectedBand.band}</span>
+                    <span>5.00 µm (Band 102)</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="101"
+                    value={selectedBandIdx}
+                    onChange={(e) => {
+                      const idx = parseInt(e.target.value);
+                      setSelectedBandIdx(idx);
+                      setActiveArray(spectrum[idx].array);
+                    }}
+                    className="w-full mt-2"
+                  />
+                </div>
+              </div>
+
+              {/* Журнал открытий гражданской науки */}
+              <div className="bg-slate-900/80 border border-slate-700/80 rounded-lg p-3 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-200">🚩 {t.discoveryLog}</span>
+                  <button onClick={handleExportDiscovery} className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-[10px] text-slate-200">
+                    ⬇ {t.exportJson}
+                  </button>
+                </div>
+                <select
+                  value={discoveryClass}
+                  onChange={(e) => setDiscoveryClass(parseInt(e.target.value))}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none"
+                >
+                  {t.classOptions.map((opt, idx) => (
+                    <option key={idx} value={idx}>{opt}</option>
+                  ))}
+                </select>
+                <button onClick={handleExportDiscovery} className="w-full py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition">
+                  ✓ {t.logBtn} ({userCircles.length} ⭕)
+                </button>
+              </div>
+            </aside>
+          </main>
+
+          {/* НИЖНИЙ ТАЙМЛАЙН (4 ЭПОХИ SPHEREX 2025–2026) */}
+          <footer className="glass-panel rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPlaying(!playing)}
+                className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5"
+              >
+                {playing ? "⏸ PAUSE" : "▶ PLAY"}
+              </button>
+              <select
+                value={speed}
+                onChange={(e) => setSpeed(parseFloat(e.target.value))}
+                className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-200"
+              >
+                <option value="0.5">0.5x</option>
+                <option value="1">1.0x</option>
+                <option value="2">2.0x</option>
+              </select>
+            </div>
+
+            {/* Шкала времени по 4 эпохам */}
+            <div className="flex-1 min-w-[260px]">
+              <div className="grid grid-cols-4 text-center text-[11px] font-mono mb-1">
+                {epochsLabels.map((lbl, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => { setPlaying(false); setEpoch(idx); }}
+                    className={`transition ${epoch === idx ? "text-indigo-400 font-bold" : "text-slate-400 hover:text-slate-200"}`}
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="3"
+                step="1"
+                value={epoch}
+                onChange={(e) => { setPlaying(false); setEpoch(parseInt(e.target.value)); }}
+                className="w-full"
+              />
+            </div>
+
+            {/* Астрометрический сдвиг в реальном времени */}
+            <div className="text-right text-xs font-mono">
+              <div className="text-[10px] text-slate-400">{t.astrometryShift}:</div>
+              <div className="text-emerald-400 font-bold">
+                ΔRA: {(target.pm_ra * epoch * 0.5).toFixed(2)}" | ΔDec: {(target.pm_dec * epoch * 0.5).toFixed(2)}"
+              </div>
+            </div>
+          </footer>
+
+          {/* Всплывающее уведомление */}
+          {toast && (
+            <div className="fixed bottom-20 right-5 z-50 bg-indigo-600 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-xl border border-indigo-400">
+              {toast}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
